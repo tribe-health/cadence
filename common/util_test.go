@@ -195,7 +195,6 @@ func TestCreateHistoryStartWorkflowRequest_RetryWorkflowExpirationTimeout(t *tes
 	require.True(t, delta > 29*time.Second)
 	require.True(t, delta < 31*time.Second)
 
-
 	// the expiration timestamp of the returned request should not be overriden by the retry policy's expiration if and
 	// only if the retry policy has a greater timeout interval than the ExecutionStartToCloseTimeoutSeconds
 	request = &types.StartWorkflowExecutionRequest{
