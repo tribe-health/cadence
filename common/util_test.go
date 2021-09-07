@@ -175,6 +175,47 @@ func TestCreateHistoryStartWorkflowRequest_ExpirationTimeWithoutCron(t *testing.
 	require.True(t, delta < 62*time.Second)
 }
 
+func TestCreateHistoryStartWorkflowRequest_RetryWorkflowExpirationTimeout(t *testing.T) {
+	// the expiration timestamp of the returned request should not be overriden by the retry policy's expiration
+	domainID := uuid.New()
+	request := &types.StartWorkflowExecutionRequest{
+		ExecutionStartToCloseTimeoutSeconds: Int32Ptr(30),
+		RetryPolicy: &types.RetryPolicy{
+			InitialIntervalInSeconds:    60,
+			ExpirationIntervalInSeconds: 20,
+		},
+	}
+	now := time.Now()
+	startRequest := CreateHistoryStartWorkflowRequest(domainID, request, now)
+	require.NotNil(t, startRequest)
+
+	expirationTime := startRequest.GetExpirationTimestamp()
+	require.NotNil(t, expirationTime)
+	delta := time.Unix(0, expirationTime).Sub(now)
+	require.True(t, delta > 29*time.Second)
+	require.True(t, delta < 31*time.Second)
+
+
+	// the expiration timestamp of the returned request should not be overriden by the retry policy's expiration if and
+	// only if the retry policy has a greater timeout interval than the ExecutionStartToCloseTimeoutSeconds
+	request = &types.StartWorkflowExecutionRequest{
+		ExecutionStartToCloseTimeoutSeconds: Int32Ptr(30),
+		RetryPolicy: &types.RetryPolicy{
+			InitialIntervalInSeconds:    60,
+			ExpirationIntervalInSeconds: 40,
+		},
+	}
+	now = time.Now()
+	startRequest = CreateHistoryStartWorkflowRequest(domainID, request, now)
+	require.NotNil(t, startRequest)
+
+	expirationTime = startRequest.GetExpirationTimestamp()
+	require.NotNil(t, expirationTime)
+	delta = time.Unix(0, expirationTime).Sub(now)
+	require.True(t, delta > 39*time.Second)
+	require.True(t, delta < 41*time.Second)
+}
+
 func TestConvertIndexedValueTypeToThriftType(t *testing.T) {
 	expected := workflow.IndexedValueType_Values()
 	for i := 0; i < len(expected); i++ {
