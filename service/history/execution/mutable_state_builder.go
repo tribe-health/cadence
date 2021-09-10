@@ -1694,31 +1694,13 @@ func (e *mutableStateBuilder) addWorkflowExecutionStartedEventForContinueAsNew(
 		FirstDecisionTaskBackoffSeconds: attributes.BackoffStartIntervalInSeconds,
 	}
 	if attributes.GetInitiator() == types.ContinueAsNewInitiatorRetryPolicy {
-		if previousExecutionState.GetExecutionInfo().Attempt == 0 {
-			// If this is the first retry attempt, update the expiration timestamp to use the retry policy timeout
-			// instead of the workflow timeout
-			if attributes.RetryPolicy != nil && attributes.RetryPolicy.GetExpirationIntervalInSeconds() > 0 {
-				expirationSeconds := attributes.RetryPolicy.GetExpirationIntervalInSeconds() + req.GetFirstDecisionTaskBackoffSeconds()
-				expirationTime := e.timeSource.Now().Add(time.Second * time.Duration(expirationSeconds))
-				req.ExpirationTimestamp = common.Int64Ptr(expirationTime.UnixNano())
-				// If the retry timeout has been passed, do not update req.ExpirationTimestamp and instead
-				// just create a timeout in the past so that the timeout task will immediately fire
-				if !previousExecutionState.GetExecutionInfo().StartTimestamp.IsZero() {
-					retryExpiration := previousExecutionState.GetExecutionInfo().StartTimestamp.Add(time.Second * time.Duration(expirationSeconds))
-					if e.timeSource.Now().After(retryExpiration) {
-						req.ExpirationTimestamp = common.Int64Ptr(retryExpiration.UnixNano())
-					}
-				}
-			}
-		} else {
-			// in the case of subsequent retry attempts past the first one, continue using the same expiration timestamp as
-			// the execution info instead of updating it
-			expirationTime := previousExecutionState.GetExecutionInfo().ExpirationTime
-			if !expirationTime.IsZero() {
-				req.ExpirationTimestamp = common.Int64Ptr(expirationTime.UnixNano())
-			}
-		}
+		// if retry timeout is greater than the workflow timeout, the workflow expiration should already reflect the
+		// retry timeout. https://github.com/uber/cadence/blob/6de89f1f4dadce67523f9a8011b313d41d3c2243/common/util.go#L526
 		req.Attempt = previousExecutionState.GetExecutionInfo().Attempt + 1
+		expirationTime := previousExecutionState.GetExecutionInfo().ExpirationTime
+		if !expirationTime.IsZero() {
+			req.ExpirationTimestamp = common.Int64Ptr(expirationTime.UnixNano())
+		}
 	} else {
 		// ContinueAsNew by decider or cron
 		req.Attempt = 0
